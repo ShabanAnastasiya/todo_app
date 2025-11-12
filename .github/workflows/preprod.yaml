@@ -4,6 +4,8 @@ on:
   push:
     branches:
       - pre-prod
+    paths:
+      - 'supabase/**'
   workflow_dispatch:
 
 jobs:

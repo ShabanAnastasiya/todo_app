@@ -12,6 +12,8 @@ on:
       - pre-prod
       - stage
       - develop
+    paths:
+      - 'supabase/**'
 
 jobs:
   manage_branch:
