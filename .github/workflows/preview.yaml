@@ -14,55 +14,48 @@ on:
       - develop
 
 jobs:
-  apply:
+  manage_branch:
     runs-on: ubuntu-latest
+    
+    # Only run the job if the PR is NOT closed, or if it is closed for destruction
+    if: github.event.action != 'closed' || github.event.action == 'closed'
+    
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      TF_VAR_linked_project: >
+      SUPABASE_PROJECT_ID: >
         ${{ (github.base_ref == 'main' &&     secrets.PRODUCTION_PROJECT_ID) ||
             (github.base_ref == 'pre-prod' && secrets.PREPROD_PROJECT_ID) ||
             (github.base_ref == 'stage' &&    secrets.STAGE_PROJECT_ID) ||
             (github.base_ref == 'develop' &&  secrets.DEVELOP_PROJECT_ID) }}
-
-      TF_VAR_git_branch: ${{ github.head_ref }}
-      TF_CLI_ARGS_apply: -target=supabase_settings.preview
-    defaults:
-      run:
-        working-directory: supabase/remotes
     outputs:
-      db_user: ${{ steps.branch.outputs.user }}
-      db_pass: ${{ steps.branch.outputs.password }}
-      db_host: ${{ steps.branch.outputs.host }}
-      db_port: ${{ steps.branch.outputs.port }}
-      jwt_secret: ${{ steps.branch.outputs.jwt_secret }}
-      ref: ${{ steps.branch.outputs.id }}
-      status: ${{ steps.branch.outputs.status }}
-      version: ${{ steps.branch.outputs.version }}
-
+      # These outputs will be automatically set by the action
+      db_pass: ${{ steps.branch.outputs.db_password }}
+      ref: ${{ steps.branch.outputs.ref }}
+      db_host: ${{ steps.branch.outputs.db_host }}
+      
     steps:
       - uses: actions/checkout@v4
-      - uses: hashicorp/setup-terraform@v3
+      
+      # Use a dedicated action to create/delete the branch
+      - uses: 0xbigboss/supabase-branch-gh-action@v1 # Example: A community-made Supabase Branching Action
+        id: branch
         with:
-          terraform_wrapper: false
-
-      - run: terraform init
-      - run: terraform apply -auto-approve -no-color
-      - id: branch
-        run: |
-          terraform output -json branch_database \
-          | jq -r "to_entries|map(\"\(.key)=\(.value|tostring)\")|.[]" \
-          >> "$GITHUB_OUTPUT"
-
-      - if: github.event.action == 'closed'
-        run: terraform apply -auto-approve -no-color -destroy
+          supabase-access-token: ${{ env.SUPABASE_ACCESS_TOKEN }}
+          supabase-project-id: ${{ env.SUPABASE_PROJECT_ID }}
+          git-branch: ${{ github.head_ref }}
+          action: ${{ github.event.action }} # Pass the PR event action (opened, closed, etc.)
+          wait-for-migrations: true
 
   migrate:
-    needs: apply
+    needs: manage_branch # Depend on the new job
     runs-on: ubuntu-latest
-    if: github.event.action != 'closed'
+    if: github.event.action != 'closed' # Only run migrations if the branch was created, not closed
+    
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
-      SUPABASE_DB_PASSWORD: ${{ needs.apply.outputs.db_pass }}
+      SUPABASE_DB_PASSWORD: ${{ needs.manage_branch.outputs.db_pass }}
+      SUPABASE_DB_HOST: ${{ needs.manage_branch.outputs.db_host }}
+      SUPABASE_PROJECT_REF: ${{ needs.manage_branch.outputs.ref }}
 
     steps:
       - uses: actions/checkout@v4
@@ -70,10 +63,6 @@ jobs:
         with:
           version: latest
 
-      - uses: nick-fields/retry@v3
-        with:
-          timeout_seconds: 15
-          max_attempts: 10
-          command: supabase link --project-ref ${{ needs.apply.outputs.ref }}
-
+      # Use the dynamically retrieved credentials to push migrations
+      - run: supabase link --project-ref $SUPABASE_PROJECT_REF
       - run: yes | supabase db reset --linked
