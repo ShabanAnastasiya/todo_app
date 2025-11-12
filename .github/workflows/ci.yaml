@@ -43,17 +43,9 @@ jobs:
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      SUPABASE_DB_PASSWORD: >
-        ${{ (github.base_ref == 'main' &&     secrets.PRODUCTION_DB_PASSWORD) ||
-            (github.base_ref == 'pre-prod' && secrets.PREPROD_DB_PASSWORD) ||
-            (github.base_ref == 'stage' &&    secrets.STAGE_DB_PASSWORD) ||
-            (github.base_ref == 'develop' &&  secrets.DEVELOP_DB_PASSWORD) }}
+      SUPABASE_DB_PASSWORD: ${{ (github.ref_name == 'main' && secrets.PRODUCTION_DB_PASSWORD) || (github.ref_name == 'pre-prod' && secrets.PREPROD_DB_PASSWORD) || (github.ref_name == 'stage' && secrets.STAGE_DB_PASSWORD) || (github.ref_name == 'develop' && secrets.DEVELOP_DB_PASSWORD) }}
 
-      SUPABASE_PROJECT_ID: >
-        ${{ (github.base_ref == 'main' &&     secrets.PRODUCTION_PROJECT_ID) ||
-            (github.base_ref == 'pre-prod' && secrets.PREPROD_PROJECT_ID) ||
-            (github.base_ref == 'stage' &&    secrets.STAGE_PROJECT_ID) ||
-            (github.base_ref == 'develop' &&  secrets.DEVELOP_PROJECT_ID) }}
+      SUPABASE_PROJECT_ID: ${{ (github.ref_name == 'main' && secrets.PRODUCTION_PROJECT_ID) || (github.ref_name == 'pre-prod' && secrets.PREPROD_PROJECT_ID) || (github.ref_name == 'stage' && secrets.STAGE_PROJECT_ID) || (github.ref_name == 'develop' && secrets.DEVELOP_PROJECT_ID) }}
 
     steps:
       - uses: actions/checkout@v4
