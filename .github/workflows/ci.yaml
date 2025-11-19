@@ -41,15 +41,32 @@ jobs:
             git diff
             exit 1
           fi
+  
+  which_branch:
+    runs-on: ubuntu-latest
+    outputs:
+      ref: ${{ steps.get_branch.outputs.branch_to_use }}
+    steps:
+      - id: get_branch
+        run: |
+          # Use github.base_ref for pull_request events, otherwise use github.ref_name
+          if [[ "${{ github.event_name }}" == "pull_request" ]]; then
+            branch_to_use=${{ github.base_ref }}
+          else
+            branch_to_use=${{ github.ref_name }}
+          fi
+          echo "branch_to_use=$branch_to_use" >> $GITHUB_OUTPUT
+          echo "supabase will try to connect from $branch_to_use branch"
 
   dryrun:
     runs-on: ubuntu-latest
+    needs: which_branch
     env:
       SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
 
-      SUPABASE_DB_PASSWORD: ${{ (github.ref_name == 'main' && secrets.PRODUCTION_DB_PASSWORD) || (github.ref_name == 'pre-prod' && secrets.PREPROD_DB_PASSWORD) || (github.ref_name == 'stage' && secrets.STAGE_DB_PASSWORD) || (github.ref_name == 'develop' && secrets.DEVELOP_DB_PASSWORD) }}
+      SUPABASE_DB_PASSWORD: ${{ (needs.which_branch.outputs.ref == 'main' && secrets.PRODUCTION_DB_PASSWORD) || (needs.which_branch.outputs.ref == 'pre-prod' && secrets.PREPROD_DB_PASSWORD) || (needs.which_branch.outputs.ref == 'stage' && secrets.STAGE_DB_PASSWORD) || (needs.which_branch.outputs.ref == 'develop' && secrets.DEVELOP_DB_PASSWORD) }}
 
-      SUPABASE_PROJECT_ID: ${{ (github.ref_name == 'main' && secrets.PRODUCTION_PROJECT_ID) || (github.ref_name == 'pre-prod' && secrets.PREPROD_PROJECT_ID) || (github.ref_name == 'stage' && secrets.STAGE_PROJECT_ID) || (github.ref_name == 'develop' && secrets.DEVELOP_PROJECT_ID) }}
+      SUPABASE_PROJECT_ID: ${{ (needs.which_branch.outputs.ref == 'main' && secrets.PRODUCTION_PROJECT_ID) || (needs.which_branch.outputs.ref == 'pre-prod' && secrets.PREPROD_PROJECT_ID) || (needs.which_branch.outputs.ref == 'stage' && secrets.STAGE_PROJECT_ID) || (needs.which_branch.outputs.ref == 'develop' && secrets.DEVELOP_PROJECT_ID) }}
 
     steps:
       - uses: actions/checkout@v4
